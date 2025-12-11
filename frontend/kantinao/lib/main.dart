@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'themes.dart';
 import 'pages/weekly_dish_form.dart';
-import 'pages/another_page.dart';
 import 'widgets/app_drawer.dart';
 
 void main() {

@@ -31,8 +31,12 @@ class _WeeklyDishFormState extends State<WeeklyDishForm> {
 
   @override
   void dispose() {
-    for (var c in _controllers) c.dispose();
-    for (var f in _focusNodes) f.dispose();
+    for (var c in _controllers) {
+      c.dispose();
+    }
+    for (var f in _focusNodes) {
+      f.dispose();
+    }
     super.dispose();
   }
 
@@ -89,8 +93,11 @@ class _WeeklyDishFormState extends State<WeeklyDishForm> {
                       fillColor: Theme.of(context).inputDecorationTheme.fillColor,
                     ),
                     onSubmitted: (_) {
-                      if (i < 6) FocusScope.of(context).requestFocus(_focusNodes[i + 1]);
-                      else _focusNodes[i].unfocus();
+                      if (i < 6) {
+                        FocusScope.of(context).requestFocus(_focusNodes[i + 1]);
+                      } else {
+                        _focusNodes[i].unfocus();
+                      }
                     },
                   ),
                 ),
