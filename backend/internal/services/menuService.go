@@ -1,0 +1,100 @@
+package services
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"kantinao-api/internal/models"
+
+	"github.com/redis/go-redis/v9"
+)
+
+type MenuService interface {
+	CreateWeeklyMenu(menu *models.WeekMenu) (*models.WeekMenu, error)
+	GetWeeklyMenu(menuID uint) (*models.WeekMenu, error)
+	GetAllMenus() ([]*models.WeekMenu, error)
+}
+
+type menuService struct {
+	rdb *redis.Client
+	ctx context.Context
+}
+
+func NewMenuService(rdb *redis.Client) MenuService {
+	return &menuService{
+		rdb: rdb,
+		ctx: context.Background(),
+	}
+}
+
+func (s *menuService) CreateWeeklyMenu(menu *models.WeekMenu) (*models.WeekMenu, error) {
+	menuID, err := s.rdb.Incr(s.ctx, "menu:id_counter").Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate menu ID: %w", err)
+	}
+	menu.ID = uint(menuID)
+
+	menuKey := fmt.Sprintf("menu:%d", menu.ID)
+
+	jsonData, err := json.Marshal(menu)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.rdb.Set(s.ctx, menuKey, jsonData, 0).Err()
+	if err != nil {
+		return nil, fmt.Errorf("failed to store menu: %w", err)
+	}
+
+	s.rdb.SAdd(s.ctx, "menus:all_ids", menuID)
+
+	return menu, nil
+}
+
+func (s *menuService) GetWeeklyMenu(menuID uint) (*models.WeekMenu, error) {
+	key := fmt.Sprintf("menu:%d", menuID)
+
+	val, err := s.rdb.Get(s.ctx, key).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, fmt.Errorf("menu with ID %d not found", menuID)
+		}
+		return nil, fmt.Errorf("redis error: %w", err)
+	}
+
+	var menu models.WeekMenu
+	if err := json.Unmarshal([]byte(val), &menu); err != nil {
+		return nil, fmt.Errorf("invalid menu format: %w", err)
+	}
+
+	return &menu, nil
+}
+
+func (s *menuService) GetAllMenus() ([]*models.WeekMenu, error) {
+	var menus []*models.WeekMenu
+
+	// Use SCAN instead of KEYS to avoid blocking Redis
+	iter := s.rdb.Scan(s.ctx, 0, "menu:*", 50).Iterator()
+	for iter.Next(s.ctx) {
+		key := iter.Val()
+
+		val, err := s.rdb.Get(s.ctx, key).Result()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read menu (%s): %w", key, err)
+		}
+
+		var menu models.WeekMenu
+		if err := json.Unmarshal([]byte(val), &menu); err != nil {
+			return nil, fmt.Errorf("failed to decode menu (%s): %w", key, err)
+		}
+
+		menus = append(menus, &menu)
+	}
+
+	if err := iter.Err(); err != nil {
+		return nil, fmt.Errorf("redis scan error: %w", err)
+	}
+
+	return menus, nil
+}
