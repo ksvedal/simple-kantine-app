@@ -19,7 +19,7 @@ func main() {
 	router.POST("/menus", menuHandler.CreateMenu)
 	router.DELETE("/menus/:id", menuHandler.DeleteMenu)
 
-	if err := router.Run(":8080"); err != nil {
+	if err := router.Run(":7420"); err != nil {
 		panic(err)
 	}
 }
