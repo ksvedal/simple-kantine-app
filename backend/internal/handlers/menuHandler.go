@@ -1,13 +1,9 @@
-// internal/handlers/menuHandler.go
-
 package handlers
 
 import (
-	"net/http"
-	"strconv"
-
 	"kantinao-api/internal/models"
 	"kantinao-api/internal/services"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -33,23 +29,6 @@ func (h *MenuHandler) CreateMenu(c *gin.Context) {
 	c.JSON(http.StatusCreated, createdMenu)
 }
 
-func (h *MenuHandler) GetMenu(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid menu ID"})
-		return
-	}
-
-	menu, err := h.Service.GetWeeklyMenu(uint(id))
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, menu)
-}
-
 func (h *MenuHandler) GetAllMenus(c *gin.Context) {
 	menus, err := h.Service.GetAllMenus()
 	if err != nil {
@@ -58,4 +37,27 @@ func (h *MenuHandler) GetAllMenus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, menus)
+}
+
+func (h *MenuHandler) GetMenu(c *gin.Context) {
+	id := c.Param("id")
+
+	menu, err := h.Service.GetSingleMenu(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, menu)
+}
+
+func (h *MenuHandler) DeleteMenu(c *gin.Context) {
+	id := c.Param("id")
+
+	if err := h.Service.DeleteMenu(id); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "menu deleted successfully"})
 }
