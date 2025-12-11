@@ -51,6 +51,24 @@ func (h *MenuHandler) GetMenu(c *gin.Context) {
 	c.JSON(http.StatusOK, menu)
 }
 
+func (h *MenuHandler) UpdateMenu(c *gin.Context) {
+	id := c.Param("id")
+
+	var updates map[string]interface{}
+	if err := c.ShouldBindJSON(&updates); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	updatedMenu, err := h.Service.UpdateMenu(id, updates)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, updatedMenu)
+}
+
 func (h *MenuHandler) DeleteMenu(c *gin.Context) {
 	id := c.Param("id")
 
