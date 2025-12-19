@@ -26,11 +26,11 @@ func main() {
 
 	menuHandler := handlers.MenuHandler{Service: services.NewMenuService(rdb)}
 
-	router.GET("/menus", menuHandler.GetAllMenus)
-	router.GET("/menus/:id", menuHandler.GetMenu)
 	router.POST("/menus", menuHandler.CreateMenu)
-	router.PUT("/menus/:id", menuHandler.UpdateMenu)
-	router.DELETE("/menus/:id", menuHandler.DeleteMenu)
+	router.GET("/menus", menuHandler.GetAllMenus)
+	router.GET("/menus/:week", menuHandler.GetMenu)
+	router.PUT("/menus/:week", menuHandler.UpdateMenu)
+	router.DELETE("/menus/:week", menuHandler.DeleteMenu)
 
 	if err := router.Run(":7420"); err != nil {
 		panic(err)

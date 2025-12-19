@@ -15,6 +15,25 @@ class MenuService {
     }
   }
 
+Future<WeekMenu> getMenuByWeek(int week) async {
+  final response = await http.get(Uri.parse('$baseUrl/menus/$week'));
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body);
+    return WeekMenu.fromJson(data);
+  } else if (response.statusCode == 404) {
+    // Return an empty menu if not found
+    return WeekMenu(
+      name: 'Weekly Menu',
+      week: week,
+      dayMenuItems: ['Monday','Tuesday','Wednesday','Thursday','Friday']
+          .map((d) => DayMenuItem(dayOfWeek: d))
+          .toList(),
+    );
+  } else {
+    throw Exception('Failed to fetch menu for week $week');
+  }
+}
+
   Future<void> createMenu(WeekMenu menu) async {
     final response = await http.post(
       Uri.parse('$baseUrl/menus'),

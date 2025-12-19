@@ -7,16 +7,15 @@ import (
 	"fmt"
 	"kantinao-api/internal/models"
 
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
 type MenuService interface {
 	CreateWeeklyMenu(menu *models.WeekMenu) (*models.WeekMenu, error)
 	GetAllMenus() ([]*models.WeekMenu, error)
-	GetSingleMenu(menuID string) (*models.WeekMenu, error)
-	DeleteMenu(menuID string) error
-	UpdateMenu(menuID string, updates map[string]interface{}) (*models.WeekMenu, error)
+	GetMenuByWeek(week string) (*models.WeekMenu, error)
+	UpdateMenuByWeek(week string, updates map[string]interface{}) (*models.WeekMenu, error)
+	DeleteMenuByWeek(week string) error
 }
 
 type menuService struct {
@@ -32,21 +31,16 @@ func NewMenuService(rdb *redis.Client) MenuService {
 }
 
 func (s *menuService) CreateWeeklyMenu(menu *models.WeekMenu) (*models.WeekMenu, error) {
-	menu.ID = uuid.New()
-
-	menuKey := fmt.Sprintf("menu:%s", menu.ID)
+	weekKey := fmt.Sprintf("menu:week:%d", menu.Week)
 
 	jsonData, err := json.Marshal(menu)
 	if err != nil {
 		return nil, err
 	}
 
-	err = s.rdb.Set(s.ctx, menuKey, jsonData, 0).Err()
-	if err != nil {
-		return nil, fmt.Errorf("failed to store menu: %w", err)
+	if err := s.rdb.Set(s.ctx, weekKey, jsonData, 0).Err(); err != nil {
+		return nil, fmt.Errorf("failed to store menu by week: %w", err)
 	}
-
-	s.rdb.SAdd(s.ctx, "menus:all_ids", menu.ID)
 
 	return menu, nil
 }
@@ -78,13 +72,13 @@ func (s *menuService) GetAllMenus() ([]*models.WeekMenu, error) {
 	return menus, nil
 }
 
-func (s *menuService) GetSingleMenu(menuID string) (*models.WeekMenu, error) {
-	key := fmt.Sprintf("menu:%s", menuID)
+func (s *menuService) GetMenuByWeek(week string) (*models.WeekMenu, error) {
+	key := fmt.Sprintf("menu:week:%s", week)
 
 	val, err := s.rdb.Get(s.ctx, key).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return nil, fmt.Errorf("menu with ID %s not found", menuID)
+			return nil, fmt.Errorf("menu for week %s not found", week)
 		}
 		return nil, fmt.Errorf("redis error: %w", err)
 	}
@@ -97,31 +91,21 @@ func (s *menuService) GetSingleMenu(menuID string) (*models.WeekMenu, error) {
 	return &menu, nil
 }
 
-func (s *menuService) UpdateMenu(menuID string, updates map[string]interface{}) (*models.WeekMenu, error) {
-	key := fmt.Sprintf("menu:%s", menuID)
-
-	val, err := s.rdb.Get(s.ctx, key).Result()
+func (s *menuService) UpdateMenuByWeek(week string, updates map[string]interface{}) (*models.WeekMenu, error) {
+	menu, err := s.GetMenuByWeek(week)
 	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			return nil, fmt.Errorf("menu %s not found", menuID)
-		}
-		return nil, fmt.Errorf("redis error: %w", err)
-	}
-
-	var menu models.WeekMenu
-	if err := json.Unmarshal([]byte(val), &menu); err != nil {
-		return nil, fmt.Errorf("invalid menu format: %w", err)
+		return nil, err
 	}
 
 	for k, v := range updates {
 		switch k {
 		case "name":
-			if name, ok := v.(string); ok {
-				menu.Name = name
+			if newName, ok := v.(string); ok {
+				menu.Name = newName
 			}
 		case "week":
-			if week, ok := v.(float64); ok {
-				menu.Week = uint(week)
+			if newWeek, ok := v.(uint); ok {
+				menu.Week = newWeek
 			}
 		case "day_items":
 			if items, ok := v.([]interface{}); ok {
@@ -134,12 +118,6 @@ func (s *menuService) UpdateMenu(menuID string, updates map[string]interface{}) 
 
 					var dayItem models.DayMenuItem
 
-					if idStr, ok := itemMap["id"].(string); ok {
-						dayItem.ID, _ = uuid.Parse(idStr)
-					} else {
-						dayItem.ID = uuid.New()
-					}
-
 					if day, ok := itemMap["day_of_week"].(string); ok {
 						dayItem.DayOfWeek = day
 					}
@@ -149,11 +127,6 @@ func (s *menuService) UpdateMenu(menuID string, updates map[string]interface{}) 
 
 					if dishMap, ok := itemMap["dish"].(map[string]interface{}); ok {
 						var dish models.Dish
-						if idStr, ok := dishMap["id"].(string); ok {
-							dish.ID, _ = uuid.Parse(idStr)
-						} else {
-							dish.ID = uuid.New()
-						}
 						if name, ok := dishMap["name"].(string); ok {
 							dish.Name = name
 						}
@@ -186,26 +159,25 @@ func (s *menuService) UpdateMenu(menuID string, updates map[string]interface{}) 
 		return nil, fmt.Errorf("failed to marshal updated menu: %w", err)
 	}
 
+	key := fmt.Sprintf("menu:week:%s", week)
 	if err := s.rdb.Set(s.ctx, key, jsonData, 0).Err(); err != nil {
 		return nil, fmt.Errorf("failed to save updated menu: %w", err)
 	}
 
-	return &menu, nil
+	return menu, nil
 }
 
-func (s *menuService) DeleteMenu(menuID string) error {
-	key := fmt.Sprintf("menu:%s", menuID)
+func (s *menuService) DeleteMenuByWeek(week string) error {
+	key := fmt.Sprintf("menu:week:%s", week)
 
 	deleted, err := s.rdb.Del(s.ctx, key).Result()
 	if err != nil {
-		return fmt.Errorf("failed to delete menu %s: %w", menuID, err)
+		return fmt.Errorf("failed to delete menu for week %s: %w", week, err)
 	}
 
 	if deleted == 0 {
-		return fmt.Errorf("menu %s not found", menuID)
+		return fmt.Errorf("menu for week %s not found", week)
 	}
-
-	s.rdb.SRem(s.ctx, "menus:all_ids", menuID)
 
 	return nil
 }

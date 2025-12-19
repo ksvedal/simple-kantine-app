@@ -40,9 +40,9 @@ func (h *MenuHandler) GetAllMenus(c *gin.Context) {
 }
 
 func (h *MenuHandler) GetMenu(c *gin.Context) {
-	id := c.Param("id")
+	week := c.Param("week")
 
-	menu, err := h.Service.GetSingleMenu(id)
+	menu, err := h.Service.GetMenuByWeek(week)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
@@ -52,7 +52,7 @@ func (h *MenuHandler) GetMenu(c *gin.Context) {
 }
 
 func (h *MenuHandler) UpdateMenu(c *gin.Context) {
-	id := c.Param("id")
+	week := c.Param("week")
 
 	var updates map[string]interface{}
 	if err := c.ShouldBindJSON(&updates); err != nil {
@@ -60,7 +60,7 @@ func (h *MenuHandler) UpdateMenu(c *gin.Context) {
 		return
 	}
 
-	updatedMenu, err := h.Service.UpdateMenu(id, updates)
+	updatedMenu, err := h.Service.UpdateMenuByWeek(week, updates)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
@@ -70,9 +70,9 @@ func (h *MenuHandler) UpdateMenu(c *gin.Context) {
 }
 
 func (h *MenuHandler) DeleteMenu(c *gin.Context) {
-	id := c.Param("id")
+	week := c.Param("week")
 
-	if err := h.Service.DeleteMenu(id); err != nil {
+	if err := h.Service.DeleteMenuByWeek(week); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}

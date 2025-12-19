@@ -13,22 +13,25 @@ class WeeklyDishForm extends StatefulWidget {
 class _WeeklyDishFormState extends State<WeeklyDishForm> {
   final MenuService service = MenuService();
 
-final List<String> _days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+  late int _selectedWeek;
+  final List<String> _days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
   late WeekMenu _weekMenu;
 
   List<WeekMenu> _allMenus = [];
   bool _loadingMenus = true;
-
   bool _loading = false;
 
   final Map<String, TextEditingController> _controllers = {};
 
-  @override
-  void initState() {
-    super.initState();
-    _initEmptyMenu();
-    _fetchMenus();
-  }
+@override
+void initState() {
+  super.initState();
+  final now = DateTime.now();
+  _selectedWeek = _getIsoWeekNumber(now);
+
+  _initEmptyMenu();
+  _fetchMenus();
+}
 
   Future<void> _fetchMenus() async {
     try {
@@ -45,27 +48,35 @@ final List<String> _days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Frida
     }
   }
 
-  void _initEmptyMenu() {
-    _weekMenu = WeekMenu(
-      id: const Uuid().v4(),
-      name: 'Weekly Menu',
-      week: _getIsoWeekNumber(DateTime.now()),
-      dayMenuItems: _days
-          .map((day) => DayMenuItem(id: const Uuid().v4(), dayOfWeek: day))
-          .toList(),
-    );
+Future<void> _initEmptyMenu() async {
+  setState(() => _loading = true);
+
+  try {
+    final menu = await service.getMenuByWeek(_selectedWeek);
+    _weekMenu = menu;
 
     for (var day in _days) {
-      _controllers[day] = TextEditingController();
-    }
-  }
+      final item = menu.dayMenuItems.firstWhere(
+        (item) => item.dayOfWeek == day,
+        orElse: () => DayMenuItem(dayOfWeek: day),
+      );
 
-  int _getIsoWeekNumber(DateTime date) {
-    final thursday = date.add(Duration(days: 4 - (date.weekday % 7)));
-    final firstJan = DateTime(thursday.year, 1, 1);
-    final diff = thursday.difference(firstJan).inDays;
-    return ((diff / 7).floor() + 1);
+      final dishName = item.dish?.name ?? '';
+
+      if (_controllers.containsKey(day)) {
+        _controllers[day]!.text = dishName;
+      } else {
+        _controllers[day] = TextEditingController(text: dishName);
+      }
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to fetch menu for week $_selectedWeek: $e')),
+    );
+  } finally {
+    setState(() => _loading = false);
   }
+}
 
   Future<void> _submitMenu() async {
     setState(() => _loading = true);
@@ -97,56 +108,11 @@ final List<String> _days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Frida
     }
   }
 
-  void _initEmptyMenu() {
-    _weekMenu = WeekMenu(
-      id: const Uuid().v4(),
-      name: 'Weekly Menu',
-      week: _getIsoWeekNumber(DateTime.now()),
-      dayMenuItems: _days
-          .map((day) => DayMenuItem(id: const Uuid().v4(), dayOfWeek: day))
-          .toList(),
-    );
-
-    for (var day in _days) {
-      _controllers[day] = TextEditingController();
-    }
-  }
-
   int _getIsoWeekNumber(DateTime date) {
     final thursday = date.add(Duration(days: 4 - (date.weekday % 7)));
     final firstJan = DateTime(thursday.year, 1, 1);
     final diff = thursday.difference(firstJan).inDays;
     return ((diff / 7).floor() + 1);
-  }
-
-  Future<void> _submitMenu() async {
-    setState(() => _loading = true);
-
-    for (var item in _weekMenu.dayMenuItems) {
-      final name = _controllers[item.dayOfWeek]?.text ?? '';
-      if (name.isNotEmpty) {
-        item.dish = Dish(
-          id: const Uuid().v4(),
-          name: name,
-        );
-      }
-    }
-
-    try {
-      await service.createMenu(_weekMenu);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Menu submitted successfully')),
-      );
-
-      // Refresh menus list
-      _fetchMenus();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to submit menu: $e')),
-      );
-    } finally {
-      setState(() => _loading = false);
-    }
   }
 
   @override
@@ -162,6 +128,41 @@ final List<String> _days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Frida
                   children: [
                     const SizedBox(height: 30),
 
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_left),
+                          onPressed: () {
+                            setState(() {
+                              _selectedWeek = (_selectedWeek - 2) % 52 + 1;
+                            });
+                            _initEmptyMenu();
+                          },
+                        ),
+
+                        const SizedBox(width: 12), // 👈 gap
+                        Text(
+                          'Week $_selectedWeek',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 12), // 👈 gap
+                        IconButton(
+                          icon: const Icon(Icons.arrow_right),
+                          onPressed: () {
+                            setState(() {
+                              _selectedWeek = _selectedWeek % 52 + 1;
+                            });
+                            _initEmptyMenu();
+                          },
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 30),
 
                     // INPUT FIELDS
                     for (var day in _days)
@@ -187,8 +188,9 @@ final List<String> _days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Frida
                       onPressed: _submitMenu,
                       child: const Text('Submit Weekly Menu'),
                     ),
+
                     // EXISTING MENUS SECTION
-                                        const Divider(height: 40),
+                    const Divider(height: 40),
 
                     const Text(
                       "Existing Menus",
